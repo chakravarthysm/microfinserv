@@ -1,35 +1,35 @@
 package service
 
-import "finserv/domain"
+import "finserv/data"
 
 type AccountService interface {
-	CreateAccount() domain.Account
-	GetAccount() domain.Account
-	UpdateAccount() domain.Account
-	DeleteAccount() domain.Account
+	CreateAccount(account data.Account) (data.Account, error)
+	GetAccount(id string) (data.Account, error)
+	UpdateAccount(id string, account data.Account) (data.Account, error)
+	DeleteAccount(id string) error
 }
 
 type AccountHandler struct {
-	AccountDB domain.AcccountsDB
+	AccountDB data.AcccountsDBImpl
 }
 
-func (a *AccountHandler) CreateAccount() domain.Account {
-	return a.AccountDB.FindBy()
+func (a *AccountHandler) CreateAccount(accnt data.Account) (data.Account, error) {
+	return a.AccountDB.Insert(accnt)
 }
 
-func (a *AccountHandler) GetAccount(userId string) domain.Account {
-	return a.AccountDB.FindBy(userId)
+func (a *AccountHandler) GetAccount(id string) (data.Account, error) {
+	return a.AccountDB.FindById(id)
 }
 
-func (a *AccountHandler) UpdateAccount() domain.Account {
-	return a.AccountDB.GetAccount()
+func (a *AccountHandler) UpdateAccount(id string, accnt data.Account) (data.Account, error) {
+	return a.AccountDB.UpdateById(id, accnt)
 }
 
-func (a *AccountHandler) DeleteAccount() domain.Account {
-	return a.AccountDB.GetAccount()
+func (a *AccountHandler) DeleteAccount(id string) error {
+	return a.AccountDB.DeleteById(id)
 }
 
-func NewAccountService(accountDb domain.AcccountsDB) AccountService {
+func NewAccountService(accountDb data.AcccountsDBImpl) *AccountHandler {
 	return &AccountHandler{
 		AccountDB: accountDb,
 	}
