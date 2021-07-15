@@ -12,18 +12,18 @@ import (
 func Init() {
 	r := mux.NewRouter()
 
-	auh := AuthHandlers{service.NewAuthService(data.NewAuthDB())}
-	ach := AccountHandlers{service.NewAccountService(data.NewAccountsDB())}
+	ah := AuthHandlers{service.NewAuthService(data.NewAuthDB())}
+	uh := UserHandlers{service.NewUsersService(data.NewUsersDB())}
 
 	// Auth routes
-	r.HandleFunc("/login", auh.login).Methods(http.MethodGet)
-	r.HandleFunc("/logout", auh.logout).Methods(http.MethodGet)
+	r.HandleFunc("/login", ah.login).Methods(http.MethodGet)
+	r.HandleFunc("/logout", ah.logout).Methods(http.MethodGet)
 
-	// Account routes
-	r.HandleFunc("/account", ach.getAccount).Methods(http.MethodGet)
-	r.HandleFunc("/account", ach.createAccount).Methods(http.MethodPost)
-	r.HandleFunc("/account", ach.getAccount).Methods(http.MethodPut)
-	r.HandleFunc("/account", ach.deleteAccount).Methods(http.MethodDelete)
+	// User routes
+	r.HandleFunc("/account", uh.getUser).Methods(http.MethodGet).Name("GetUser")
+	r.HandleFunc("/account", uh.createUser).Methods(http.MethodPost).Name("CreateUser")
+	r.HandleFunc("/account", uh.getUser).Methods(http.MethodPut).Name("UpdateUser")
+	r.HandleFunc("/account", uh.deleteUser).Methods(http.MethodDelete).Name("DeleteUser")
 	am := AuthMiddleware{data.NewAuthDB()}
 	r.Use(am.authorizationHandler())
 	log.Fatal(http.ListenAndServe("localhost:3000", r))

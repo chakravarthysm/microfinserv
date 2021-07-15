@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	_ "github.com/lib/pq"
 )
 
 type AuthDBImpl interface {
@@ -33,11 +34,20 @@ type AuthToken struct {
 	token *jwt.Token
 }
 
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type LoginResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+}
+
 type Login struct {
 	Username string         `db:"username"`
-	UserId   sql.NullString `db:"id"`
+	UserId   sql.NullString `db:"user_id"`
 	Accounts sql.NullString `db:"account_numbers"`
-	Role     string         `db:"role"`
 }
 
 func (l Login) ClaimsForAccessToken() AccessTokenClaims {
@@ -67,7 +77,7 @@ func (t AuthToken) NewAccessToken() (string, error) {
 }
 
 func (a *AuthDB) FindByUsername(username, password string) (*Login, error) {
-	findAccountQuery := "SELECT * FROM USERS where userame=userId"
+	findAccountQuery := "SELECT username, user_id, account_numbers FROM USERS where userame=$1 AND password=$2"
 
 	rows, err := a.client.Query(findAccountQuery)
 	if err != nil {
@@ -109,7 +119,7 @@ func jwtTokenFromString(tokenString string) (*jwt.Token, error) {
 }
 
 func NewAuthDB() AuthDBImpl {
-	connStr := "postgres://pqgotest:password@localhost/pqgotest?sslmode=verify-full"
+	connStr := "user=postgres dbname=finserv password=root host=localhost sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal(err)

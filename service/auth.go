@@ -4,18 +4,8 @@ import (
 	"finserv/data"
 )
 
-type LoginRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-type LoginResponse struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-}
-
 type AuthService interface {
-	Login(LoginRequest) (*LoginResponse, *error)
+	Login(data.LoginRequest) (*data.LoginResponse, *error)
 	Verify(urlParams map[string]string) *error
 }
 
@@ -23,7 +13,7 @@ type DefaultAuthService struct {
 	source data.AuthDBImpl
 }
 
-func (s DefaultAuthService) Login(req LoginRequest) (*LoginResponse, error) {
+func (s DefaultAuthService) Login(req data.LoginRequest) (*data.LoginResponse, error) {
 	var err error
 	var login *data.Login
 
@@ -39,7 +29,7 @@ func (s DefaultAuthService) Login(req LoginRequest) (*LoginResponse, error) {
 		return nil, err
 	}
 
-	return &LoginResponse{AccessToken: accessToken}, nil
+	return &data.LoginResponse{AccessToken: accessToken}, nil
 
 }
 

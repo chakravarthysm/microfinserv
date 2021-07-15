@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/gorilla/mux"
 )
 
 type AuthMiddleware struct {
@@ -15,6 +17,11 @@ func (a AuthMiddleware) authorizationHandler() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
+			currentRoute := mux.CurrentRoute(r)
+			fmt.Println("name", currentRoute.GetName())
+			if currentRoute.GetName() == "CreateUser" {
+				next.ServeHTTP(w, r)
+			}
 
 			if authHeader != "" {
 				token := getTokenFromHeader(authHeader)
