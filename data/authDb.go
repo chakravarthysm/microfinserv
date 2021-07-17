@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -24,9 +23,9 @@ const HMAC_SAMPLE_SECRET = "hmacSampleSecret"
 const ACCESS_TOKEN_DURATION = time.Hour
 
 type AccessTokenClaims struct {
-	UserId   string   `json:"customer_id"`
-	Accounts []string `json:"accounts"`
-	Username string   `json:"username"`
+	UserId   int32   `json:"user_id"`
+	Accounts []int32 `json:"accounts"`
+	Username string  `json:"username"`
 	jwt.StandardClaims
 }
 
@@ -45,16 +44,24 @@ type LoginResponse struct {
 }
 
 type Login struct {
-	Username string         `db:"username"`
-	UserId   sql.NullString `db:"user_id"`
-	Accounts sql.NullString `db:"account_numbers"`
+	UserId   sql.NullInt32   `db:"user_id"`
+	Username string          `db:"username"`
+	Accounts []sql.NullInt32 `db:"account_numbers"`
+}
+
+type UserMeta struct {
+	UserId   string `db:"user_id"`
+	Username string `db:"username"`
 }
 
 func (l Login) ClaimsForAccessToken() AccessTokenClaims {
-	accounts := strings.Split(l.Accounts.String, ",")
+	// accounts := []int32{}
+	// for _, accnt := range l.Accounts {
+	// 	accounts = append(accounts, accnt.Int32)
+	// }
 	return AccessTokenClaims{
-		UserId:   l.UserId.String,
-		Accounts: accounts,
+		UserId: l.UserId.Int32,
+		//Accounts: accounts,
 		Username: l.Username,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ACCESS_TOKEN_DURATION).Unix(),
@@ -77,22 +84,17 @@ func (t AuthToken) NewAccessToken() (string, error) {
 }
 
 func (a *AuthDB) FindByUsername(username, password string) (*Login, error) {
-	findAccountQuery := "SELECT username, user_id, account_numbers FROM USERS where userame=$1 AND password=$2"
+	findUserQuery := "SELECT user_id, username FROM users where username=$1 AND password=$2"
 
-	rows, err := a.client.Query(findAccountQuery)
+	row := a.client.QueryRow(findUserQuery, username, password)
+	var id int32
+	var usrname string
+	err := row.Scan(&id, &usrname)
 	if err != nil {
 		return &Login{}, err
 	}
 
-	var lgn Login
-	for rows.Next() {
-		err := rows.Scan(&lgn)
-		if err != nil {
-			return &Login{}, err
-		}
-	}
-
-	return &lgn, nil
+	return &Login{Username: usrname, UserId: sql.NullInt32{Int32: id, Valid: true}}, nil
 }
 
 func (a AuthDB) IsAuthorized(token string) bool {
@@ -108,7 +110,7 @@ func (a AuthDB) IsAuthorized(token string) bool {
 }
 
 func jwtTokenFromString(tokenString string) (*jwt.Token, error) {
-	token, err := jwt.ParseWithClaims(tokenString, AccessTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &AccessTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		return []byte(HMAC_SAMPLE_SECRET), nil
 	})
 	if err != nil {
@@ -118,12 +120,6 @@ func jwtTokenFromString(tokenString string) (*jwt.Token, error) {
 	return token, nil
 }
 
-func NewAuthDB() AuthDBImpl {
-	connStr := "user=postgres dbname=finserv password=root host=localhost sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return &AuthDB{db}
+func NewAuthDB(client *sql.DB) AuthDBImpl {
+	return &AuthDB{client}
 }

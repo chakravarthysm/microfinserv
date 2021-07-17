@@ -3,15 +3,13 @@ package data
 import (
 	"database/sql"
 
-	"log"
-
 	_ "github.com/lib/pq"
 )
 
 type UsersDBImpl interface {
 	Insert(User) (UserResponse, error)
-	FindById(string) (User, error)
-	UpdateById(string, User) (User, error)
+	FindById(string) (UserResponse, error)
+	UpdateById(string, User) (UserResponse, error)
 	DeleteById(string) error
 }
 
@@ -48,58 +46,82 @@ func (a *UsersDB) Insert(usr User) (UserResponse, error) {
 	insertUserQuery := `INSERT INTO users ("username", "password", "name","location", "pan", "address", "contact_number", "gender", "nationality")
 	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`
 
-	rows, err := a.client.Query(insertUserQuery, usr.Username, usr.Password, usr.Name, usr.Location, usr.PAN, usr.Address, usr.ContactNumber, usr.Gender, usr.Nationality)
+	row := a.client.QueryRow(insertUserQuery, usr.Username, usr.Password, usr.Name, usr.Location, usr.PAN, usr.Address, usr.ContactNumber, usr.Gender, usr.Nationality)
+	var u UserResponse
+	var password string
+	var status int
+	err := row.Scan(
+		&u.UserId,
+		&u.Username,
+		&password,
+		&u.Name,
+		&u.Location,
+		&u.PAN,
+		&u.Address,
+		&u.Gender,
+		&u.Nationality,
+		&u.ContactNumber,
+		&status,
+	)
 	if err != nil {
 		return UserResponse{}, err
 	}
-	var u UserResponse
-	for rows.Next() {
-		err := rows.Scan(&u)
-		if err != nil {
-			return UserResponse{}, err
-		}
-	}
 
 	return u, nil
 }
 
-func (a *UsersDB) FindById(id string) (User, error) {
+func (a *UsersDB) FindById(id string) (UserResponse, error) {
 	findUserQuery := "SELECT * FROM users WHERE user_id=$1 AND status=$2"
-
-	rows, err := a.client.Query(findUserQuery, id, 1)
+	var u UserResponse
+	row := a.client.QueryRow(findUserQuery, id, 1)
+	var password string
+	var status int
+	err := row.Scan(
+		&u.UserId,
+		&u.Username,
+		&password,
+		&u.Name,
+		&u.Location,
+		&u.PAN,
+		&u.Address,
+		&u.Gender,
+		&u.Nationality,
+		&u.ContactNumber,
+		&status,
+	)
 	if err != nil {
-		return User{}, err
+		return UserResponse{}, err
 	}
-
-	var u User
-	for rows.Next() {
-		err := rows.Scan(&u)
-		if err != nil {
-			return User{}, err
-		}
-	}
-
 	return u, nil
 }
 
-func (a *UsersDB) UpdateById(id string, usr User) (User, error) {
-	findUserQuery := `INSERT INTO users ("username", "password","name", "location", "pan", "address", "contact_number", "gender", "nationality")
+func (a *UsersDB) UpdateById(id string, usr User) (UserResponse, error) {
+	updateUserQuery := `INSERT INTO users ("username", "password", "name", "location", "pan", "address", "contact_number", "gender", "nationality")
 	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-	WHERE user_id=id 
-	ON CONFLICT ("name", "location", "pan", "address", "contact_number", "gender", "nationality")
+	WHERE user_id=$10 AND status=$11
+	ON CONFLICT ("username", "password", "name", "location", "pan", "address", "contact_number", "gender", "nationality")
 	DO NOTHING`
 
-	rows, err := a.client.Query(findUserQuery, usr.Username, usr.Password, usr.Name, usr.Location, usr.PAN, usr.Address, usr.ContactNumber, usr.Gender, usr.Nationality)
-	if err != nil {
-		return User{}, err
-	}
+	row := a.client.QueryRow(updateUserQuery, usr.Username, usr.Password, usr.Name, usr.Location, usr.PAN, usr.Address, usr.ContactNumber, usr.Gender, usr.Nationality, id, 1)
 
-	var u User
-	for rows.Next() {
-		err := rows.Scan(&u)
-		if err != nil {
-			return User{}, err
-		}
+	var u UserResponse
+	var password string
+	var status int
+	err := row.Scan(
+		&u.UserId,
+		&u.Username,
+		&password,
+		&u.Name,
+		&u.Location,
+		&u.PAN,
+		&u.Address,
+		&u.Gender,
+		&u.Nationality,
+		&u.ContactNumber,
+		&status,
+	)
+	if err != nil {
+		return UserResponse{}, err
 	}
 
 	return u, nil
@@ -126,12 +148,6 @@ func (a *UsersDB) DeleteById(id string) error {
 	return nil
 }
 
-func NewUsersDB() UsersDBImpl {
-	connStr := "user=postgres dbname=finserv password=postgres host=localhost sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return &UsersDB{db}
+func NewUsersDB(client *sql.DB) UsersDBImpl {
+	return &UsersDB{client}
 }

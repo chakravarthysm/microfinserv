@@ -2,7 +2,6 @@ package server
 
 import (
 	"finserv/data"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -18,9 +17,9 @@ func (a AuthMiddleware) authorizationHandler() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			currentRoute := mux.CurrentRoute(r)
-			fmt.Println("name", currentRoute.GetName())
-			if currentRoute.GetName() == "CreateUser" {
+			if currentRoute.GetName() == "CreateUser" || currentRoute.GetName() == "login" {
 				next.ServeHTTP(w, r)
+				return
 			}
 
 			if authHeader != "" {
@@ -30,13 +29,14 @@ func (a AuthMiddleware) authorizationHandler() func(http.Handler) http.Handler {
 
 				if isAuthorized {
 					next.ServeHTTP(w, r)
+					return
 				} else {
-					w.WriteHeader(http.StatusForbidden)
-					fmt.Fprint(w, []byte("Unauthorized"))
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
 				}
 			} else {
-				w.WriteHeader(http.StatusUnauthorized)
-				fmt.Fprint(w, []byte("Missing token"))
+				http.Error(w, "Missing Token", http.StatusUnauthorized)
+				return
 			}
 		})
 	}
