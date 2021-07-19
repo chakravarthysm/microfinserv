@@ -9,20 +9,20 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func Init() {
+func InitRoutes() {
 	r := mux.NewRouter()
 
 	dbClient, err := data.GetDbClient()
 	if err != nil {
 		log.Fatal(err)
 	}
-	ah := AuthHandlers{service.NewAuthService(data.NewAuthDB(dbClient))}
+	ah := AuthHandler{service.NewAuthService(data.NewAuthDB(dbClient))}
 	ach := AccountHandler{service.NewAccountService(data.NewAccountsDB(dbClient))}
-	uh := UserHandlers{service.NewUsersService(data.NewUsersDB(dbClient))}
+	uh := UserHandler{service.NewUsersService(data.NewUsersDB(dbClient))}
 
 	// Auth routes
-	r.HandleFunc("/login", ah.login).Methods(http.MethodPost).Name("login")
-	r.HandleFunc("/logout", ah.logout).Methods(http.MethodPost)
+	r.HandleFunc("/login", ah.login).Methods(http.MethodPost).Name("Login")
+	r.HandleFunc("/logout", ah.logout).Methods(http.MethodPost).Name("Logout")
 
 	// User routes
 	r.HandleFunc("/users/{user_id}", uh.getUser).Methods(http.MethodGet).Name("GetUser")

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -12,20 +13,20 @@ import (
 
 type AuthDBImpl interface {
 	FindByUsername(username, password string) (*Login, error)
-	IsAuthorized(token string) bool
+	IsAuthorized(token string, routeVars map[string]string) bool
 }
 
 type AuthDB struct {
 	client *sql.DB
 }
 
-const HMAC_SAMPLE_SECRET = "hmacSampleSecret"
+const HMACSecret = "hmac_secret"
 const ACCESS_TOKEN_DURATION = time.Hour
 
 type AccessTokenClaims struct {
-	UserId   int32   `json:"user_id"`
-	Accounts []int32 `json:"accounts"`
-	Username string  `json:"username"`
+	UserId   string   `json:"user_id"`
+	Accounts []string `json:"accounts"`
+	Username string   `json:"username"`
 	jwt.StandardClaims
 }
 
@@ -44,24 +45,16 @@ type LoginResponse struct {
 }
 
 type Login struct {
-	UserId   sql.NullInt32   `db:"user_id"`
-	Username string          `db:"username"`
-	Accounts []sql.NullInt32 `db:"account_numbers"`
-}
-
-type UserMeta struct {
-	UserId   string `db:"user_id"`
-	Username string `db:"username"`
+	UserId   sql.NullString `db:"user_id"`
+	Username string         `db:"username"`
+	Accounts sql.NullString `db:"account_numbers"`
 }
 
 func (l Login) ClaimsForAccessToken() AccessTokenClaims {
-	// accounts := []int32{}
-	// for _, accnt := range l.Accounts {
-	// 	accounts = append(accounts, accnt.Int32)
-	// }
+	accounts := strings.Split(l.Accounts.String, ",")
 	return AccessTokenClaims{
-		UserId: l.UserId.Int32,
-		//Accounts: accounts,
+		UserId:   l.UserId.String,
+		Accounts: accounts,
 		Username: l.Username,
 		StandardClaims: jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(ACCESS_TOKEN_DURATION).Unix(),
@@ -75,7 +68,7 @@ func NewAuthToken(claims AccessTokenClaims) AuthToken {
 }
 
 func (t AuthToken) NewAccessToken() (string, error) {
-	signedString, err := t.token.SignedString([]byte(HMAC_SAMPLE_SECRET))
+	signedString, err := t.token.SignedString([]byte(HMACSecret))
 	if err != nil {
 		log.Println("Failed while signing access token: " + err.Error())
 		return "", errors.New("cannot generate access token")
@@ -84,34 +77,67 @@ func (t AuthToken) NewAccessToken() (string, error) {
 }
 
 func (a *AuthDB) FindByUsername(username, password string) (*Login, error) {
-	findUserQuery := "SELECT user_id, username FROM users where username=$1 AND password=$2"
+	findUserQuery := `SELECT u.user_id, u.username, array_agg(a.account_id) as account_numbers FROM users u 
+	LEFT JOIN accounts a ON a.user_id = u.user_id 
+	WHERE username = $1 and password = $2 and u.status = $3
+	GROUP BY a.user_id, u.username, u.user_id`
 
-	row := a.client.QueryRow(findUserQuery, username, password)
-	var id int32
+	row := a.client.QueryRow(findUserQuery, username, password, 1)
+	var id string
 	var usrname string
-	err := row.Scan(&id, &usrname)
+	var accnts string
+	err := row.Scan(&id, &usrname, &accnts)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return &Login{}, errors.New("User not found")
+		}
 		return &Login{}, err
 	}
 
-	return &Login{Username: usrname, UserId: sql.NullInt32{Int32: id, Valid: true}}, nil
+	return &Login{
+		Username: usrname,
+		UserId:   sql.NullString{String: id, Valid: true},
+		Accounts: sql.NullString{String: strings.TrimFunc(accnts, func(r rune) bool {
+			return (r == '{' || r == '}')
+		}), Valid: true},
+	}, nil
 }
 
-func (a AuthDB) IsAuthorized(token string) bool {
-	if jwtToken, err := jwtTokenFromString(token); err != nil {
+func (a AuthDB) IsAuthorized(token string, routeVars map[string]string) bool {
+	jwtToken, err := jwtTokenFromString(token)
+	if err != nil {
 		return false
-	} else {
-		if jwtToken.Valid {
-			return true
-		} else {
-			return false
-		}
 	}
+
+	if jwtToken.Valid {
+		claims := jwtToken.Claims.(*AccessTokenClaims)
+		return claims.VerifyCliams(routeVars)
+	}
+
+	return false
+}
+
+func (c AccessTokenClaims) VerifyCliams(routeVars map[string]string) bool {
+	if c.UserId != routeVars["user_id"] {
+		return false
+	}
+
+	if routeVars["account_id"] != "" {
+		accountFound := false
+		for _, a := range c.Accounts {
+			if a == routeVars["account_id"] {
+				accountFound = true
+				break
+			}
+		}
+		return accountFound
+	}
+	return true
 }
 
 func jwtTokenFromString(tokenString string) (*jwt.Token, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &AccessTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return []byte(HMAC_SAMPLE_SECRET), nil
+		return []byte(HMACSecret), nil
 	})
 	if err != nil {
 		log.Println("Error while parsing token: " + err.Error())

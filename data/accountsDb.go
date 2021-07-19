@@ -5,72 +5,34 @@ import (
 	"errors"
 	"log"
 	"time"
+
+	uuid "github.com/satori/go.uuid"
 )
-
-const dateLayout = "2006-01-02 15:04:05"
-
-type NewAccountRequest struct {
-	UserId int     `json:"user_id"`
-	Amount float64 `json:"amount"`
-}
-
-type NewAccountResponse struct {
-	AccountId int `json:"account_id"`
-}
-
-type TransactionRequest struct {
-	AccountId       int     `json:"account_id"`
-	Amount          float64 `json:"amount"`
-	TransactionType string  `json:"transaction_type"`
-	TransactionDate string  `json:"transaction_date"`
-	UserId          int     `json:"-"`
-}
-
-type TransactionResponse struct {
-	TransactionId   int     `json:"transaction_id"`
-	AccountId       int     `json:"account_id"`
-	Amount          float64 `json:"new_balance"`
-	TransactionType string  `json:"transaction_type"`
-	TransactionDate string  `json:"transaction_date"`
-}
-
-type Account struct {
-	AccountId int     `db:"account_id"`
-	UserId    int     `db:"user_id"`
-	CreatedOn string  `db:"created_on"`
-	Amount    float64 `db:"amount"`
-	Status    int     `db:"status"`
-}
-
-type Transaction struct {
-	TransactionId   int     `db:"transaction_id"`
-	AccountId       int     `db:"account_id"`
-	Amount          float64 `db:"amount"`
-	TransactionType string  `db:"transaction_type"`
-	TransactionDate string  `db:"transaction_date"`
-}
 
 type AccountsDB struct {
 	client *sql.DB
 }
 
 func (a Account) CanWithdraw(amount float64) bool {
-	return a.Amount >= amount
+	return a.Balance >= amount
 }
 
-func NewAccount(userId int, amount float64) Account {
+func NewAccount(userId string, amount float64) Account {
 	return Account{
 		UserId:    userId,
 		CreatedOn: time.Now().Format(dateLayout),
-		Amount:    amount,
+		Balance:   amount,
 		Status:    1,
 	}
 }
 
 func (a AccountsDB) CreateAccount(accnt Account) (*Account, error) {
-	accountCreateQuery := "INSERT INTO accounts (user_id, created_on, amount, status) values ($1, $2, $3, $4) RETURNING account_id"
-	var id int
-	err := a.client.QueryRow(accountCreateQuery, accnt.UserId, accnt.CreatedOn, accnt.Amount, 1).Scan(&id)
+
+	// TODO: return error if user is inactive
+
+	accountCreateQuery := "INSERT INTO accounts (account_id, user_id, created_on, balance, status) values ($1, $2, $3, $4, $5) RETURNING account_id"
+	var id string
+	err := a.client.QueryRow(accountCreateQuery, uuid.NewV4(), accnt.UserId, accnt.CreatedOn, accnt.Balance, 1).Scan(&id)
 	if err != nil {
 		log.Println("Error while creating new account: " + err.Error())
 		return nil, errors.New("error while creating new account")
@@ -87,19 +49,21 @@ func (a AccountsDB) SaveTransaction(t Transaction) (*Transaction, error) {
 		return nil, errors.New("unexpected database error")
 	}
 
-	row := tx.QueryRow(`INSERT INTO transactions (account_id, amount, transaction_type, transaction_date) 
-											values ($1, $2, $3, $4) RETURNING transaction_id`, t.AccountId, t.Amount, t.TransactionType, t.TransactionDate)
+	// TODO: return error if user/account is inactive
 
-	var transactionId int
+	row := tx.QueryRow(`INSERT INTO transactions (transaction_id, account_id, balance, transaction_type, transaction_date) 
+											values ($1, $2, $3, $4, $5) RETURNING transaction_id`, uuid.NewV4(), t.AccountId, t.Amount, t.TransactionType, t.TransactionDate)
+
+	var transactionId string
 	err = row.Scan(&transactionId)
 	if err != nil {
 		log.Println("Error while getting the last transaction id: " + err.Error())
 		return nil, errors.New("unexpected database error")
 	}
 	if t.TransactionType == "withdrawal" {
-		_, err = tx.Exec(`UPDATE accounts SET amount = amount - $1 WHERE account_id = $2`, t.Amount, t.AccountId)
+		_, err = tx.Exec(`UPDATE accounts SET balance = balance - $1 WHERE account_id = $2`, t.Amount, t.AccountId)
 	} else {
-		_, err = tx.Exec(`UPDATE accounts SET amount = amount + $1 WHERE account_id = $2`, t.Amount, t.AccountId)
+		_, err = tx.Exec(`UPDATE accounts SET balance = balance + $1 WHERE account_id = $2`, t.Amount, t.AccountId)
 	}
 
 	if err != nil {
@@ -121,21 +85,24 @@ func (a AccountsDB) SaveTransaction(t Transaction) (*Transaction, error) {
 	}
 
 	t.TransactionId = transactionId
-	t.Amount = account.Amount
+	t.Amount = account.Balance
 	return &t, nil
 }
 
-func (a AccountsDB) FindAccountById(accountId int) (*Account, error) {
-	getAccountQuery := "SELECT account_id, user_id, created_on, amount from accounts where account_id = $1 AND status = $2"
+func (a AccountsDB) FindAccountById(accountId string) (*Account, error) {
+	getAccountQuery := "SELECT account_id, user_id, created_on, balance from accounts where account_id = $1 AND status = $2"
 	var account Account
 	row := a.client.QueryRow(getAccountQuery, accountId, 1)
 	err := row.Scan(
 		&account.AccountId,
 		&account.UserId,
 		&account.CreatedOn,
-		&account.Amount,
+		&account.Balance,
 	)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return &Account{}, errors.New("Account not found")
+		}
 		return &Account{}, err
 	}
 	return &account, nil

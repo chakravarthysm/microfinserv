@@ -1,19 +1,16 @@
 package service
 
 import (
+	"errors"
+	"finserv/common"
 	"finserv/data"
 )
 
-type AuthService interface {
-	Login(data.LoginRequest) (*data.LoginResponse, *error)
-	Verify(urlParams map[string]string) *error
-}
-
-type DefaultAuthService struct {
+type AuthService struct {
 	source data.AuthDBImpl
 }
 
-func (s DefaultAuthService) Login(req data.LoginRequest) (*data.LoginResponse, error) {
+func (s AuthService) Login(req data.LoginRequest) (*data.LoginResponse, error) {
 	var err error
 	var login *data.Login
 
@@ -33,6 +30,20 @@ func (s DefaultAuthService) Login(req data.LoginRequest) (*data.LoginResponse, e
 
 }
 
-func NewAuthService(authDb data.AuthDBImpl) DefaultAuthService {
-	return DefaultAuthService{authDb}
+func (s AuthService) Logout(jwt string) error {
+	var err error = errors.New("Error occured when loggin out")
+	redisClient, err := common.NewRedisClient()
+	if err != nil {
+		return err
+	}
+
+	if err = redisClient.AddToBlacklist(jwt); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func NewAuthService(authDb data.AuthDBImpl) AuthService {
+	return AuthService{authDb}
 }

@@ -8,16 +8,15 @@ import (
 
 const dateLayout = "2006-01-02 15:04:05"
 
-type AccountService interface {
-	NewAccount(request data.NewAccountRequest) (*data.NewAccountResponse, error)
-	MakeTransaction(request data.TransactionRequest) (*data.TransactionResponse, error)
+type AccountServiceImpl interface {
+	NewAccount(data.NewAccountRequest) (*data.NewAccountResponse, error)
+	MakeTransaction(data.TransactionRequest) (*data.TransactionResponse, error)
 }
-
-type DefaultAccountService struct {
+type AccountService struct {
 	source data.AccountsDB
 }
 
-func (d DefaultAccountService) NewAccount(req data.NewAccountRequest) (*data.NewAccountResponse, error) {
+func (d *AccountService) NewAccount(req data.NewAccountRequest) (*data.NewAccountResponse, error) {
 	account := data.NewAccount(req.UserId, req.Amount)
 	if newAccount, err := d.source.CreateAccount(account); err != nil {
 		return nil, err
@@ -26,7 +25,7 @@ func (d DefaultAccountService) NewAccount(req data.NewAccountRequest) (*data.New
 	}
 }
 
-func (d DefaultAccountService) MakeTransaction(req data.TransactionRequest) (*data.TransactionResponse, error) {
+func (d *AccountService) MakeTransaction(req data.TransactionRequest) (*data.TransactionResponse, error) {
 
 	if req.TransactionType == "withdrawal" {
 		account, err := d.source.FindAccountById(req.AccountId)
@@ -34,7 +33,7 @@ func (d DefaultAccountService) MakeTransaction(req data.TransactionRequest) (*da
 			return nil, err
 		}
 		if !account.CanWithdraw(req.Amount) {
-			return nil, errors.New("Insufficient balance in the account")
+			return nil, errors.New("insufficient balance in the account")
 		}
 	}
 
@@ -44,15 +43,15 @@ func (d DefaultAccountService) MakeTransaction(req data.TransactionRequest) (*da
 		TransactionType: req.TransactionType,
 		TransactionDate: time.Now().Format(dateLayout),
 	}
-	transaction, appError := d.source.SaveTransaction(t)
-	if appError != nil {
-		return nil, appError
+	transaction, err := d.source.SaveTransaction(t)
+	if err != nil {
+		return nil, err
 	}
 
 	response := data.TransactionResponse{
 		TransactionId:   transaction.TransactionId,
 		AccountId:       transaction.AccountId,
-		Amount:          transaction.Amount,
+		Balance:         transaction.Amount,
 		TransactionType: transaction.TransactionType,
 		TransactionDate: transaction.TransactionDate,
 	}
@@ -60,6 +59,6 @@ func (d DefaultAccountService) MakeTransaction(req data.TransactionRequest) (*da
 	return &response, nil
 }
 
-func NewAccountService(repo data.AccountsDB) DefaultAccountService {
-	return DefaultAccountService{repo}
+func NewAccountService(repo data.AccountsDB) AccountServiceImpl {
+	return &AccountService{repo}
 }

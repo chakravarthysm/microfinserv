@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS "users_auth" CASCADE;
 DROP TABLE IF EXISTS "transactions" CASCADE;
 
 CREATE TABLE IF NOT EXISTS "users" (
-  "user_id" int GENERATED ALWAYS AS IDENTITY (START WITH 100) PRIMARY KEY,
+  "user_id" varchar(50) UNIQUE NOT NULL,
   "username" varchar(50) UNIQUE NOT NULL,
   "password" varchar(255) NOT NULL,
   "name" varchar(50) NOT NULL,
@@ -18,9 +18,9 @@ CREATE TABLE IF NOT EXISTS "users" (
 );
 
 CREATE TABLE IF NOT EXISTS "accounts" (
-	"account_id" int GENERATED ALWAYS AS IDENTITY (START WITH 1000) PRIMARY KEY,
-	"user_id" int NOT NULL,
-	"amount" decimal NOT NULL,
+	"account_id" varchar(50) UNIQUE NOT NULL,
+	"user_id" varchar(50) NOT NULL,
+	"balance" decimal NOT NULL,
 	"created_on" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	"status" smallint NOT NULL DEFAULT '1',
 	CONSTRAINT fk_user
@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS "accounts" (
 
 
 CREATE TABLE IF NOT EXISTS "transactions" (
-  "transaction_id" int GENERATED ALWAYS AS IDENTITY (START WITH 10000) PRIMARY KEY,
-  "account_id" int NOT NULL,
-  "amount" decimal(10,2) NOT NULL,
+  "transaction_id" varchar(50) UNIQUE NOT NULL,
+  "account_id" varchar(50) NOT NULL,
+  "balance" decimal(10,2) NOT NULL,
   "transaction_type" varchar(10) NOT NULL,
   "transaction_date" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_account
